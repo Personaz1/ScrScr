@@ -1,82 +1,52 @@
 #!/bin/bash
 
-# SSH Password Interceptor - Скрипт деинсталляции
-# Версия 1.1.0
+# Скрипт для удаления SSH Password Interceptor
 
-echo "====================================="
-echo "   SSH Password Interceptor v1.1.0"
-echo "         Деинсталляция"
-echo "====================================="
-echo ""
-
-# Проверка привилегий root
-if [ "$(id -u)" != "0" ]; then
-    echo "Ошибка: для деинсталляции требуются привилегии администратора."
-    echo "Запустите скрипт с sudo: sudo ./uninstall.sh"
-    exit 1
+# Проверка root прав
+if [ "$EUID" -ne 0 ]; then
+  echo "Для удаления требуются права root"
+  echo "Запустите скрипт с sudo: sudo $0"
+  exit 1
 fi
 
-# Проверка операционной системы
-OS=$(uname -s)
-if [ "$OS" != "Linux" ]; then
-    echo "Ошибка: автоматическая деинсталляция поддерживается только для Linux."
-    exit 1
-fi
+echo "Удаление SSH Password Interceptor..."
 
-# Определение имени библиотеки
-LIB_NAME="libssh_inject.so"
-LIB_PATH="/usr/lib/$LIB_NAME"
-
-# Проверка наличия библиотеки
-if [ -f "$LIB_PATH" ]; then
-    echo "Удаление библиотеки $LIB_PATH..."
-    rm -f "$LIB_PATH"
-    echo "Библиотека удалена."
+# Удаление библиотеки
+if [ -f /usr/lib/libssh_inject.so ]; then
+    rm -f /usr/lib/libssh_inject.so
+    echo "- Библиотека удалена"
 else
-    echo "Библиотека $LIB_PATH не найдена."
+    echo "- Библиотека не найдена"
 fi
 
-# Обработка файла /etc/ld.so.preload
-if [ -f "/etc/ld.so.preload" ]; then
-    echo "Проверка настроек автозагрузки..."
-    
-    # Создаем резервную копию
-    cp /etc/ld.so.preload /etc/ld.so.preload.uninstall.bak
-    echo "Создана резервная копия: /etc/ld.so.preload.uninstall.bak"
-    
-    # Удаляем ссылку на нашу библиотеку
-    if grep -q "/usr/lib/$LIB_NAME" /etc/ld.so.preload; then
-        grep -v "/usr/lib/$LIB_NAME" /etc/ld.so.preload > /etc/ld.so.preload.new
-        mv /etc/ld.so.preload.new /etc/ld.so.preload
-        echo "Ссылка на библиотеку удалена из /etc/ld.so.preload"
-        
-        # Если файл пустой, можно его удалить
-        if [ ! -s /etc/ld.so.preload ]; then
-            rm -f /etc/ld.so.preload
-            echo "Файл /etc/ld.so.preload пуст и был удален."
-        fi
-    else
-        echo "Библиотека не была настроена для автозагрузки."
-    fi
+# Удаление автозагрузки
+if [ -f /etc/profile.d/ssh_inject.sh ]; then
+    rm -f /etc/profile.d/ssh_inject.sh
+    echo "- Автозагрузка отключена"
 else
-    echo "Файл /etc/ld.so.preload не найден."
+    echo "- Файл автозагрузки не найден"
 fi
 
-# Предлагаем удалить лог-файл
-echo ""
-read -p "Удалить файл логов (/tmp/ssh_inj.dbg)? (y/n): " choice
+# Очистка переменной LD_PRELOAD
+echo "- Сброс LD_PRELOAD (только для текущей сессии)"
+unset LD_PRELOAD
+export LD_PRELOAD=
 
-if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-    if [ -f "/tmp/ssh_inj.dbg" ]; then
+# Спрашиваем про лог-файл
+read -p "Удалить лог-файл /tmp/ssh_inj.dbg? (y/n): " removelog
+
+if [ "$removelog" == "y" ] || [ "$removelog" == "Y" ]; then
+    if [ -f /tmp/ssh_inj.dbg ]; then
         rm -f /tmp/ssh_inj.dbg
-        echo "Файл логов удален."
+        echo "- Лог-файл удален"
     else
-        echo "Файл логов не найден."
+        echo "- Лог-файл не найден"
     fi
 else
-    echo "Файл логов сохранен."
+    echo "- Лог-файл сохранен: /tmp/ssh_inj.dbg"
 fi
 
 echo ""
-echo "Деинсталляция завершена успешно!"
-echo "" 
+echo "Удаление SSH Password Interceptor завершено!"
+echo ""
+echo "Для полного применения изменений рекомендуется перезагрузка системы." 
