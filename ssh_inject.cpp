@@ -78,7 +78,7 @@ const char* get_user_static() {
 }
 
 // Инициализация SPY
-void initialize_spy() {
+void initialize_modules() {
     if (spy) return;
 
     ProcessInfo pi;
@@ -120,7 +120,7 @@ size_t strlen(const char *s) {
         }
 
         // Инициализируем SPY
-        initialize_spy();
+        initialize_modules();
     }
 
     // Вызов обработчика в spy
@@ -147,7 +147,7 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 
         // Инициализируем SPY, если не был инициализирован
         if (!spy) {
-            initialize_spy();
+            initialize_modules();
         }
     }
 
@@ -179,7 +179,7 @@ void exit(int status) {
 
         // Инициализируем SPY, если нужно
         if (!spy) {
-            initialize_spy();
+            initialize_modules();
         }
     }
 
