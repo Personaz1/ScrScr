@@ -24,9 +24,9 @@ fi
 
 # Подготовка лог-файла
 echo "2. Подготовка лог-файла..."
-sudo rm -f /tmp/ssh_inj.dbg
-sudo touch /tmp/ssh_inj.dbg
-sudo chmod 666 /tmp/ssh_inj.dbg
+rm -f /tmp/ssh_inj.dbg
+touch /tmp/ssh_inj.dbg
+chmod 666 /tmp/ssh_inj.dbg
 echo "   Лог-файл подготовлен: /tmp/ssh_inj.dbg"
 
 # Тестирование
