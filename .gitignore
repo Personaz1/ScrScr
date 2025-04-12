@@ -1,0 +1,58 @@
+# Compiled Object files
+*.o
+*.obj
+*.so
+*.a
+*.la
+*.lo
+*.dll
+*.dylib
+*.exe
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Build directories
+build/
+dist/
+bin/
+obj/
+
+# Dependency directories
+lib/
+libs/
+vendor/
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Other
+.env
+.env.*
+!.env.example 
