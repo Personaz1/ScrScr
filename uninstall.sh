@@ -1,77 +1,82 @@
 #!/bin/bash
 
-# Скрипт для удаления libssh_inject.so из системы
+# SSH Password Interceptor - Скрипт деинсталляции
+# Версия 1.1.0
 
-# Проверка root прав
-if [ "$EUID" -ne 0 ]; then
-  echo "Для удаления библиотеки требуются права администратора."
-  echo "Запустите скрипт с sudo: sudo ./uninstall.sh"
-  exit 1
+echo "====================================="
+echo "   SSH Password Interceptor v1.1.0"
+echo "         Деинсталляция"
+echo "====================================="
+echo ""
+
+# Проверка привилегий root
+if [ "$(id -u)" != "0" ]; then
+    echo "Ошибка: для деинсталляции требуются привилегии администратора."
+    echo "Запустите скрипт с sudo: sudo ./uninstall.sh"
+    exit 1
 fi
 
-LIBRARY_PATH="/usr/lib/libssh_inject.so"
+# Проверка операционной системы
+OS=$(uname -s)
+if [ "$OS" != "Linux" ]; then
+    echo "Ошибка: автоматическая деинсталляция поддерживается только для Linux."
+    exit 1
+fi
+
+# Определение имени библиотеки
+LIB_NAME="libssh_inject.so"
+LIB_PATH="/usr/lib/$LIB_NAME"
 
 # Проверка наличия библиотеки
-if [ ! -f "$LIBRARY_PATH" ]; then
-  echo "Библиотека $LIBRARY_PATH не найдена."
-  echo "Возможно, она уже была удалена или установлена в другое место."
+if [ -f "$LIB_PATH" ]; then
+    echo "Удаление библиотеки $LIB_PATH..."
+    rm -f "$LIB_PATH"
+    echo "Библиотека удалена."
 else
-  # Удаление библиотеки
-  echo "Удаление библиотеки $LIBRARY_PATH..."
-  rm -f "$LIBRARY_PATH"
-  if [ ! -f "$LIBRARY_PATH" ]; then
-    echo "Библиотека успешно удалена."
-  else
-    echo "Ошибка: не удалось удалить библиотеку $LIBRARY_PATH."
-    exit 1
-  fi
+    echo "Библиотека $LIB_PATH не найдена."
 fi
 
-# Проверка и очистка /etc/ld.so.preload
-if [ -f /etc/ld.so.preload ]; then
-  echo "Проверка файла /etc/ld.so.preload..."
-  
-  # Создаем резервную копию
-  cp /etc/ld.so.preload /etc/ld.so.preload.uninstall.bak
-  echo "Создана резервная копия: /etc/ld.so.preload.uninstall.bak"
-  
-  # Проверяем, содержит ли файл ссылку на нашу библиотеку
-  if grep -q "libssh_inject.so" /etc/ld.so.preload; then
-    echo "Удаление записи о библиотеке из /etc/ld.so.preload..."
-    # Создаем временный файл с удаленной строкой
-    grep -v "libssh_inject.so" /etc/ld.so.preload > /etc/ld.so.preload.tmp
+# Обработка файла /etc/ld.so.preload
+if [ -f "/etc/ld.so.preload" ]; then
+    echo "Проверка настроек автозагрузки..."
     
-    # Если временный файл пустой, удаляем ld.so.preload
-    if [ ! -s /etc/ld.so.preload.tmp ]; then
-      rm -f /etc/ld.so.preload
-      rm -f /etc/ld.so.preload.tmp
-      echo "Файл /etc/ld.so.preload был очищен и удален."
+    # Создаем резервную копию
+    cp /etc/ld.so.preload /etc/ld.so.preload.uninstall.bak
+    echo "Создана резервная копия: /etc/ld.so.preload.uninstall.bak"
+    
+    # Удаляем ссылку на нашу библиотеку
+    if grep -q "/usr/lib/$LIB_NAME" /etc/ld.so.preload; then
+        grep -v "/usr/lib/$LIB_NAME" /etc/ld.so.preload > /etc/ld.so.preload.new
+        mv /etc/ld.so.preload.new /etc/ld.so.preload
+        echo "Ссылка на библиотеку удалена из /etc/ld.so.preload"
+        
+        # Если файл пустой, можно его удалить
+        if [ ! -s /etc/ld.so.preload ]; then
+            rm -f /etc/ld.so.preload
+            echo "Файл /etc/ld.so.preload пуст и был удален."
+        fi
     else
-      # Иначе заменяем старый файл новым
-      mv /etc/ld.so.preload.tmp /etc/ld.so.preload
-      echo "Запись о библиотеке удалена из /etc/ld.so.preload."
+        echo "Библиотека не была настроена для автозагрузки."
     fi
-  else
-    echo "Запись о библиотеке не найдена в /etc/ld.so.preload."
-  fi
 else
-  echo "Файл /etc/ld.so.preload не найден, очистка не требуется."
+    echo "Файл /etc/ld.so.preload не найден."
 fi
 
-# Спрашиваем, нужно ли удалять лог-файл
+# Предлагаем удалить лог-файл
 echo ""
-echo -n "Удалить файл логов /tmp/ssh_inj.dbg? [y/N]: "
-read delete_logs
+read -p "Удалить файл логов (/tmp/ssh_inj.dbg)? (y/n): " choice
 
-if [[ "$delete_logs" =~ ^[Yy]$ ]]; then
-  rm -f /tmp/ssh_inj.dbg
-  echo "Файл логов удален."
+if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+    if [ -f "/tmp/ssh_inj.dbg" ]; then
+        rm -f /tmp/ssh_inj.dbg
+        echo "Файл логов удален."
+    else
+        echo "Файл логов не найден."
+    fi
 else
-  echo "Файл логов сохранен: /tmp/ssh_inj.dbg"
+    echo "Файл логов сохранен."
 fi
 
 echo ""
-echo "Удаление завершено."
-echo "ВНИМАНИЕ: Если вы перезапустите систему или выполните ldconfig,"
-echo "изменения вступят в силу немедленно. В противном случае,"
-echo "библиотека может оставаться в памяти для текущих процессов." 
+echo "Деинсталляция завершена успешно!"
+echo "" 

