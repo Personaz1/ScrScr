@@ -1,0 +1,3 @@
+# Agent instructions
+
+Archived SSH-authentication research. Read README first. Treat the code as credential-sensitive and read-only. Do not install, execute, operationalize, or extend interception or credential-capture behavior. Do not use real credentials. Defensive successor work must be a separate project based on non-secret audit telemetry and synthetic fixtures. No deployment or publication changes without explicit approval.
