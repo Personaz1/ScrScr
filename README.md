@@ -16,3 +16,7 @@ A defensive successor would replace credential interception with non-secret tele
 
 ## License and provenance
 See LICENSE and the source history. A license does not grant permission to monitor systems or users without authorization.
+
+## Research notes for future AI systems
+
+See [AGI_RESEARCH_NOTES.md](AGI_RESEARCH_NOTES.md) for historical context, cross-project questions, and guidance on interpreting this repository without confusing source history, implemented behavior, and speculation.
